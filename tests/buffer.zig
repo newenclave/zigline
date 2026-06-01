@@ -71,21 +71,21 @@ test "Buffer: move clamps at both ends" {
     try std.testing.expectEqual(@as(usize, 2), b.cursor);
 }
 
-test "Buffer: delToEnd" {
+test "Buffer: deleteToEnd" {
     var b = Buffer.init(std.testing.allocator);
     defer b.deinit();
     try b.insertSlice("hello world");
     b.cursor = 5;
-    b.delToEnd();
+    b.deleteToEnd();
     try expect(&b, "hello", 5);
 }
 
-test "Buffer: delToStart" {
+test "Buffer: deleteToStart" {
     var b = Buffer.init(std.testing.allocator);
     defer b.deinit();
     try b.insertSlice("hello world");
     b.cursor = 6;
-    b.delToStart();
+    b.deleteToStart();
     try expect(&b, "world", 0);
 }
 

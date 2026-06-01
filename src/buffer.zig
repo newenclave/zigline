@@ -94,11 +94,11 @@ pub const Buffer = struct {
         self.cursor = self.bytes.items.len;
     }
 
-    pub fn delToEnd(self: *Self) void {
+    pub fn deleteToEnd(self: *Self) void {
         self.bytes.shrinkRetainingCapacity(self.cursor);
     }
 
-    pub fn delToStart(self: *Self) void {
+    pub fn deleteToStart(self: *Self) void {
         self.bytes.replaceRangeAssumeCapacity(0, self.cursor, &.{});
         self.cursor = 0;
     }
