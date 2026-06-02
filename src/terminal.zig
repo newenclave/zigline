@@ -196,12 +196,11 @@ const WindowsRawMode = struct {
 
     const cp_utf8: c_uint = 65001;
 
-    // TODO: should we store this to resore after?
     extern "kernel32" fn GetConsoleCP() callconv(.winapi) w.UINT;
     extern "kernel32" fn GetConsoleOutputCP() callconv(.winapi) w.UINT;
 
-    extern "kernel32" fn SetConsoleCP(lpMode: w.UINT) callconv(.winapi) w.BOOL;
-    extern "kernel32" fn SetConsoleOutputCP(lpMode: w.UINT) callconv(.winapi) w.BOOL;
+    extern "kernel32" fn SetConsoleCP(cp: w.UINT) callconv(.winapi) w.BOOL;
+    extern "kernel32" fn SetConsoleOutputCP(cp: w.UINT) callconv(.winapi) w.BOOL;
 
     extern "kernel32" fn GetConsoleMode(hConsoleHandle: w.HANDLE, lpMode: *w.DWORD) callconv(.winapi) w.BOOL;
     extern "kernel32" fn SetConsoleMode(hConsoleHandle: w.HANDLE, dwMode: w.DWORD) callconv(.winapi) w.BOOL;
@@ -212,6 +211,8 @@ const WindowsRawMode = struct {
     out_handle: w.HANDLE,
     in_original: w.DWORD,
     out_original: w.DWORD,
+    cp_original: w.UINT,
+    cp_output_original: w.UINT,
 
     pub fn enable() ErrorSet!WindowsRawMode {
         const in_handle = std.Io.File.stdin().handle;
@@ -219,6 +220,9 @@ const WindowsRawMode = struct {
 
         var in_mode: w.DWORD = 0;
         var out_mode: w.DWORD = 0;
+
+        const cp_original = GetConsoleCP();
+        const cp_output_original = GetConsoleOutputCP();
 
         _ = SetConsoleCP(cp_utf8);
         _ = SetConsoleOutputCP(cp_utf8);
@@ -250,11 +254,15 @@ const WindowsRawMode = struct {
             .out_handle = out_handle,
             .in_original = in_mode,
             .out_original = out_mode,
+            .cp_original = cp_original,
+            .cp_output_original = cp_output_original,
         };
     }
 
     pub fn disable(self: *WindowsRawMode) void {
         _ = SetConsoleMode(self.in_handle, self.in_original);
         _ = SetConsoleMode(self.out_handle, self.out_original);
+        _ = SetConsoleCP(self.cp_original);
+        _ = SetConsoleOutputCP(self.cp_output_original);
     }
 };

@@ -71,10 +71,10 @@ pub const Line = struct {
         }
         const r = &self.reader.?.interface;
 
-        var raw = terminal.RawMode.enable() catch {
-            return self.readLineCooked(w, r);
-        };
-        defer raw.disable();
+        // var raw = terminal.RawMode.enable() catch {
+        //     return self.readLineCooked(w, r);
+        // };
+        // defer raw.disable();
 
         return self.editLoop(w, r);
     }

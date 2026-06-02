@@ -2,7 +2,7 @@ const std = @import("std");
 const Allocator = std.mem.Allocator;
 
 fn prevBoundary(items: []const u8, idx: usize) usize {
-    var i = idx - 1; // idx > 0 guaranteed by callers
+    var i = idx - 1;
     while ((i > 0) and ((items[i] & 0xC0) == 0x80)) {
         i -= 1;
     }

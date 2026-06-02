@@ -1,4 +1,5 @@
 const std = @import("std");
+const Allocator = std.mem.Allocator;
 
 const Quote = enum {
     none,
@@ -7,7 +8,7 @@ const Quote = enum {
 };
 
 pub const Error = error{ UnterminatedQuote, UnterminatedEscape } ||
-    std.mem.Allocator.Error;
+    Allocator.Error;
 
 const Chars = enum(u8) {
     space = ' ',
@@ -19,7 +20,7 @@ const Chars = enum(u8) {
     backslash = '\\',
 };
 
-pub fn tokenize(arena: std.mem.Allocator, input: []const u8) Error![][]u8 {
+pub fn tokenize(arena: Allocator, input: []const u8) Error![][]u8 {
     var tokens: std.ArrayList([]u8) = .empty;
     var cur: std.ArrayList(u8) = .empty;
     defer cur.deinit(arena);

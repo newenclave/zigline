@@ -2,6 +2,7 @@ const std = @import("std");
 const Io = std.Io;
 
 const zigline = @import("zigline");
+const terminal = zigline.terminal;
 
 pub fn main(init: std.process.Init) !void {
     const gpa = init.gpa;
@@ -16,6 +17,8 @@ pub fn main(init: std.process.Init) !void {
 
     var editor = zigline.Line.init(gpa, io, .{ .prompt = "zigline> " });
     defer editor.deinit();
+    var raw = try terminal.RawMode.enable();
+    defer raw.disable();
 
     while (try editor.readLine()) |line| {
         defer gpa.free(line);
