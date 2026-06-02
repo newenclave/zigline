@@ -1,7 +1,7 @@
 # zigline
 
-A small line-editing dependency-free library for Zig
-cousin of [readline](https://en.wikipedia.org/wiki/GNU_Readline)/[replxx](https://github.com/AmokHuginnsson/replxx).
+A small line-editing dependency-free library for Zig.
+Cousin of [readline](https://en.wikipedia.org/wiki/GNU_Readline)/[replxx](https://github.com/AmokHuginnsson/replxx).
 
 ## What is here:
 
@@ -68,7 +68,40 @@ pub fn main(init: std.process.Init) !void {
 That's basically the included demo. You can see the full version in
 [`src/main.zig`](src/main.zig).
 
-## Requires 
+## Output example:
+
+```
+zigline> Helo, world
+2 token(s):
+  [0] 'Helo,'
+  [1] 'world'
+zigline> päivää, mitä kuuluu
+3 token(s):
+  [0] 'päivää,'
+  [1] 'mitä'
+  [2] 'kuuluu'
+zigline> تسجّل الآن لحضور المؤتمر الدولي العاشر ليونيكود (Unicode Conference)
+9 token(s):
+  [0] 'تسجّل'
+  [1] 'الآن'
+  [2] 'لحضور'
+  [3] 'المؤتمر'
+  [4] 'الدولي'
+  [5] 'العاشر'
+  [6] 'ليونيكود'
+  [7] '(Unicode'
+  [8] 'Conference)'
+zigline> line with a "double ' quotes" and 'single " quotes'
+6 token(s):
+  [0] 'line'
+  [1] 'with'
+  [2] 'a'
+  [3] 'double ' quotes'
+  [4] 'and'
+  [5] 'single " quotes'
+```
+
+## Requires
 
     Zig 0.16
 
