@@ -143,13 +143,15 @@ pub const RawMode = switch (native_os) {
     else => PosixRawMode,
 };
 
+pub const Error = RawMode.ErrorSet;
+
 const PosixRawMode = struct {
-    const Error = std.posix.TermiosGetError || std.posix.TIOCError;
+    pub const ErrorSet = std.posix.TermiosGetError || std.posix.TIOCError;
 
     fd: std.posix.fd_t,
     original: std.posix.termios,
 
-    pub fn enable() Error!PosixRawMode {
+    pub fn enable() ErrorSet!PosixRawMode {
         const fd = std.Io.File.stdin().handle;
         const original = try std.posix.tcgetattr(fd);
         var raw = original;
@@ -192,27 +194,40 @@ const WindowsRawMode = struct {
     const ENABLE_PROCESSED_OUTPUT: w.DWORD = 0x0001;
     const ENABLE_VIRTUAL_TERMINAL_PROCESSING: w.DWORD = 0x0004;
 
+    const cp_utf8: c_uint = 65001;
+
+    // TODO: should we store this to resore after?
+    extern "kernel32" fn GetConsoleCP() callconv(.winapi) w.UINT;
+    extern "kernel32" fn GetConsoleOutputCP() callconv(.winapi) w.UINT;
+
+    extern "kernel32" fn SetConsoleCP(lpMode: w.UINT) callconv(.winapi) w.BOOL;
+    extern "kernel32" fn SetConsoleOutputCP(lpMode: w.UINT) callconv(.winapi) w.BOOL;
+
     extern "kernel32" fn GetConsoleMode(hConsoleHandle: w.HANDLE, lpMode: *w.DWORD) callconv(.winapi) w.BOOL;
     extern "kernel32" fn SetConsoleMode(hConsoleHandle: w.HANDLE, dwMode: w.DWORD) callconv(.winapi) w.BOOL;
 
-    const Error = error{ NotATerminal, SetConsoleModeFailed };
+    pub const ErrorSet = error{ NotATerminal, SetConsoleModeFailed };
 
     in_handle: w.HANDLE,
     out_handle: w.HANDLE,
     in_original: w.DWORD,
     out_original: w.DWORD,
 
-    pub fn enable() Error!WindowsRawMode {
+    pub fn enable() ErrorSet!WindowsRawMode {
         const in_handle = std.Io.File.stdin().handle;
         const out_handle = std.Io.File.stdout().handle;
 
         var in_mode: w.DWORD = 0;
         var out_mode: w.DWORD = 0;
+
+        _ = SetConsoleCP(cp_utf8);
+        _ = SetConsoleOutputCP(cp_utf8);
+
         if (!GetConsoleMode(in_handle, &in_mode).toBool()) {
-            return Error.NotATerminal;
+            return ErrorSet.NotATerminal;
         }
         if (!GetConsoleMode(out_handle, &out_mode).toBool()) {
-            return Error.NotATerminal;
+            return ErrorSet.NotATerminal;
         }
 
         var new_in = in_mode;
@@ -223,11 +238,11 @@ const WindowsRawMode = struct {
         new_out |= ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
 
         if (!SetConsoleMode(in_handle, new_in).toBool()) {
-            return Error.SetConsoleModeFailed;
+            return ErrorSet.SetConsoleModeFailed;
         }
         if (!SetConsoleMode(out_handle, new_out).toBool()) {
             _ = SetConsoleMode(in_handle, in_mode);
-            return Error.SetConsoleModeFailed;
+            return ErrorSet.SetConsoleModeFailed;
         }
 
         return .{
