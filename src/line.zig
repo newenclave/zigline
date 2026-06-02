@@ -1,3 +1,13 @@
+//!
+//! line.zig - Line editing
+//!
+//! @author
+//!     newenclave
+//! @license
+//!     MIT
+//! @see
+//!     github.com/newenclave/zigline
+//!
 const std = @import("std");
 const Io = std.Io;
 const Allocator = std.mem.Allocator;

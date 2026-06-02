@@ -1,3 +1,13 @@
+//!
+//! buffer.zig - Buffer for line editing
+//!
+//! @author
+//!     newenclave
+//! @license
+//!     MIT
+//! @see
+//!     github.com/newenclave/zigline
+//!
 const std = @import("std");
 const Allocator = std.mem.Allocator;
 

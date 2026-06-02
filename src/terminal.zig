@@ -1,3 +1,13 @@
+//!
+//! terminal.zig - Terminal handling for line editing
+//!
+//! @author
+//!     newenclave
+//! @license
+//!     MIT
+//! @see
+//!     github.com/newenclave/zigline
+//!
 const std = @import("std");
 const builtin = @import("builtin");
 const native_os = builtin.os.tag;
