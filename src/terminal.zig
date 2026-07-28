@@ -156,7 +156,9 @@ pub const RawMode = switch (native_os) {
 pub const Error = RawMode.ErrorSet;
 
 const PosixRawMode = struct {
-    pub const ErrorSet = std.posix.TermiosGetError || std.posix.TIOCError;
+    pub const ErrorSet = std.posix.TermiosGetError ||
+        std.posix.TermiosSetError ||
+        std.posix.TIOCError;
 
     fd: std.posix.fd_t,
     original: std.posix.termios,

@@ -12,7 +12,7 @@ pub fn main(init: std.process.Init) !void {
     var stdout_file_writer: Io.File.Writer = .init(.stdout(), io, &stdout_buffer);
     const out = &stdout_file_writer.interface;
 
-    try out.writeAll("zigline demo REPL\n\n");
+    try out.writeAll("zigline demo REPL\r\n\n");
     try out.flush();
 
     var editor = zigline.Line.init(gpa, io, .{ .prompt = "zigline> " });
@@ -32,15 +32,15 @@ pub fn main(init: std.process.Init) !void {
             continue;
         };
 
-        try out.print("{d} token(s):\n", .{tokens.len});
+        try out.print("{d} token(s):\r\n", .{tokens.len});
         for (tokens, 0..) |tok, i| {
-            try out.print("  [{d}] '{s}'\n", .{ i, tok });
+            try out.print("  [{d}] '{s}'\r\n", .{ i, tok });
         }
         try out.flush();
 
         try editor.historyAdd(line);
     }
 
-    try out.writeAll("noniin!\n");
+    try out.writeAll("noniin!\r\n");
     try out.flush();
 }
