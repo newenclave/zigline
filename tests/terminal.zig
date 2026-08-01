@@ -10,6 +10,17 @@ fn decodeOne(bytes: []const u8) !Key {
     return readKey(&r);
 }
 
+test "Terminal: geometry coordinates retain their dimensions" {
+    const coord: terminal.Geometry.Coord = .{ .x = 80, .y = 24 };
+    try std.testing.expectEqual(@as(u16, 80), coord.x);
+    try std.testing.expectEqual(@as(u16, 24), coord.y);
+}
+
+test "Terminal: colors expose the expected palette" {
+    try std.testing.expectEqual(terminal.Color.red, .red);
+    try std.testing.expectEqual(terminal.Color.cyan, .cyan);
+}
+
 test "Terminal: printable ASCII decodes to codepoint" {
     try std.testing.expectEqual(Key{ .codepoint = 'a' }, try decodeOne("a"));
     try std.testing.expectEqual(Key{ .codepoint = ' ' }, try decodeOne(" "));

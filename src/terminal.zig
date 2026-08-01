@@ -148,6 +148,285 @@ fn readSs3(r: *std.Io.Reader) Key {
     };
 }
 
+pub const Geometry = switch (native_os) {
+    .windows => WindowsGeometry,
+    else => PosixGeometry,
+};
+
+const GeometryCoord = struct {
+    x: u16,
+    y: u16,
+};
+
+const PosixGeometry = struct {
+    pub const Coord = GeometryCoord;
+    pub const GeometryError = error{ NotATerminal, OutputFailed };
+    pub const Error = GeometryError;
+
+    const ioctl_get_winsize: c_int = switch (native_os) {
+        .linux => @intCast(std.os.linux.T.IOCGWINSZ),
+        .macos, .freebsd, .netbsd, .openbsd => @bitCast(@as(u32, 0x40087468)),
+        else => @compileError("terminal.Geometry is unsupported on this platform"),
+    };
+    const ioctl_set_winsize: c_int = switch (native_os) {
+        .linux => @intCast(std.os.linux.T.IOCSWINSZ),
+        .macos, .freebsd, .netbsd, .openbsd => @bitCast(@as(u32, 0x80087467)),
+        else => @compileError("terminal.Geometry is unsupported on this platform"),
+    };
+
+    fn writeAll(bytes: []const u8) GeometryError!void {
+        var remaining = bytes;
+        while (remaining.len > 0) {
+            const written = std.c.write(std.Io.File.stdout().handle, remaining.ptr, remaining.len);
+            if (written <= 0) return error.OutputFailed;
+            remaining = remaining[@intCast(written)..];
+        }
+    }
+
+    pub fn size() GeometryError!Coord {
+        var window_size: std.posix.winsize = undefined;
+        const result = std.c.ioctl(
+            std.Io.File.stdout().handle,
+            ioctl_get_winsize,
+            @intFromPtr(&window_size),
+        );
+        if (std.posix.errno(result) != .SUCCESS) return error.NotATerminal;
+        return .{ .x = window_size.col, .y = window_size.row };
+    }
+
+    pub fn clear() GeometryError!void {
+        const window_size = try size();
+        const spaces = [_]u8{' '} ** 256;
+        var row: u16 = 0;
+        while (row < window_size.y) : (row += 1) {
+            try setPos(0, row);
+            var remaining = window_size.x;
+            while (remaining > 0) {
+                const len = @min(remaining, spaces.len);
+                try writeAll(spaces[0..len]);
+                remaining -= @intCast(len);
+            }
+        }
+    }
+
+    pub fn setPos(x: u16, y: u16) GeometryError!void {
+        var buffer: [24]u8 = undefined;
+        const sequence = std.fmt.bufPrint(&buffer, "\x1b[{d};{d}H", .{
+            @as(u32, y) + 1,
+            @as(u32, x) + 1,
+        }) catch return error.OutputFailed;
+        try writeAll(sequence);
+    }
+
+    pub fn setSize(x: u16, y: u16) GeometryError!void {
+        var window_size = std.posix.winsize{ .row = y, .col = x, .xpixel = 0, .ypixel = 0 };
+        const result = std.c.ioctl(
+            std.Io.File.stdout().handle,
+            ioctl_set_winsize,
+            @intFromPtr(&window_size),
+        );
+        if (std.posix.errno(result) != .SUCCESS) return error.NotATerminal;
+    }
+};
+
+const WindowsGeometry = struct {
+    const w = std.os.windows;
+
+    const CoordWin = extern struct { X: w.SHORT, Y: w.SHORT };
+    const SmallRect = extern struct { Left: w.SHORT, Top: w.SHORT, Right: w.SHORT, Bottom: w.SHORT };
+    const ConsoleScreenBufferInfo = extern struct {
+        dwSize: CoordWin,
+        dwCursorPosition: CoordWin,
+        wAttributes: w.WORD,
+        srWindow: SmallRect,
+        dwMaximumWindowSize: CoordWin,
+    };
+
+    extern "kernel32" fn GetConsoleScreenBufferInfo(
+        handle: w.HANDLE,
+        info: *ConsoleScreenBufferInfo,
+    ) callconv(.winapi) w.BOOL;
+    extern "kernel32" fn FillConsoleOutputCharacterA(
+        handle: w.HANDLE,
+        character: u8,
+        length: w.DWORD,
+        position: CoordWin,
+        written: *w.DWORD,
+    ) callconv(.winapi) w.BOOL;
+    extern "kernel32" fn SetConsoleCursorPosition(
+        handle: w.HANDLE,
+        position: CoordWin,
+    ) callconv(.winapi) w.BOOL;
+
+    pub const Coord = GeometryCoord;
+    pub const GeometryError = error{ NotATerminal, OperationFailed, InvalidCoordinate };
+    pub const Error = GeometryError;
+
+    fn boolSucceeded(value: w.BOOL) bool {
+        return switch (@typeInfo(w.BOOL)) {
+            .int => value != 0,
+            .@"enum" => @intFromEnum(value) != 0,
+            else => @compileError("unexpected Windows BOOL representation"),
+        };
+    }
+
+    fn screenBufferInfo() GeometryError!ConsoleScreenBufferInfo {
+        var info: ConsoleScreenBufferInfo = undefined;
+        if (!boolSucceeded(GetConsoleScreenBufferInfo(std.Io.File.stdout().handle, &info))) {
+            return error.NotATerminal;
+        }
+        return info;
+    }
+
+    fn toCoord(x: u16, y: u16) GeometryError!CoordWin {
+        if (x > std.math.maxInt(w.SHORT) or y > std.math.maxInt(w.SHORT)) {
+            return error.InvalidCoordinate;
+        }
+        return .{ .X = @intCast(x), .Y = @intCast(y) };
+    }
+
+    pub fn size() GeometryError!Coord {
+        const info = try screenBufferInfo();
+        return .{
+            .x = @intCast(info.srWindow.Right - info.srWindow.Left + 1),
+            .y = @intCast(info.srWindow.Bottom - info.srWindow.Top + 1),
+        };
+    }
+
+    pub fn clear() GeometryError!void {
+        const handle = std.Io.File.stdout().handle;
+        const info = try screenBufferInfo();
+        if (info.dwSize.X < 0 or info.dwSize.Y < 0) return error.OperationFailed;
+        const length: w.DWORD = @intCast(@as(u32, @intCast(info.dwSize.X)) * @as(u32, @intCast(info.dwSize.Y)));
+        var written: w.DWORD = 0;
+        if (!boolSucceeded(FillConsoleOutputCharacterA(
+            handle,
+            ' ',
+            length,
+            .{ .X = 0, .Y = 0 },
+            &written,
+        ))) {
+            return error.OperationFailed;
+        }
+        if (written != length) return error.OperationFailed;
+        try setPos(0, 0);
+    }
+
+    pub fn setPos(x: u16, y: u16) GeometryError!void {
+        if (!boolSucceeded(SetConsoleCursorPosition(
+            std.Io.File.stdout().handle,
+            try toCoord(x, y),
+        ))) {
+            return error.OperationFailed;
+        }
+    }
+};
+
+pub const Color = enum {
+    none,
+    red,
+    green,
+    blue,
+    yellow,
+    white,
+    cyan,
+};
+
+pub const ColorOutput = switch (native_os) {
+    .windows => WindowsColorOutput,
+    else => PosixColorOutput,
+};
+
+pub const ColorError = ColorOutput.Error;
+
+pub fn setColor(color: Color) ColorError!void {
+    try ColorOutput.set(color);
+}
+
+pub fn light() ColorError!void {
+    try setColor(.white);
+}
+
+pub fn red() ColorError!void {
+    try setColor(.red);
+}
+
+pub fn green() ColorError!void {
+    try setColor(.green);
+}
+
+pub fn blue() ColorError!void {
+    try setColor(.blue);
+}
+
+pub fn yellow() ColorError!void {
+    try setColor(.yellow);
+}
+
+pub fn none() ColorError!void {
+    try setColor(.none);
+}
+
+pub fn cyan() ColorError!void {
+    try setColor(.cyan);
+}
+
+const PosixColorOutput = struct {
+    pub const OutputError = error{OutputFailed};
+    pub const Error = OutputError;
+
+    pub fn set(color: Color) OutputError!void {
+        const sequence = switch (color) {
+            .none => "\x1b[0m",
+            .red => "\x1b[31;1m",
+            .green => "\x1b[32;1m",
+            .blue => "\x1b[34;1m",
+            .yellow => "\x1b[33;1m",
+            .white => "\x1b[37;1m",
+            .cyan => "\x1b[36;1m",
+        };
+
+        var remaining = sequence;
+        while (remaining.len > 0) {
+            const written = std.c.write(std.Io.File.stdout().handle, remaining.ptr, remaining.len);
+            if (written <= 0) return error.OutputFailed;
+            remaining = remaining[@intCast(written)..];
+        }
+    }
+};
+
+const WindowsColorOutput = struct {
+    const w = std.os.windows;
+
+    extern "kernel32" fn SetConsoleTextAttribute(handle: w.HANDLE, attributes: w.WORD) callconv(.winapi) w.BOOL;
+
+    pub const OutputError = error{SetColorFailed};
+    pub const Error = OutputError;
+
+    fn boolSucceeded(value: w.BOOL) bool {
+        return switch (@typeInfo(w.BOOL)) {
+            .int => value != 0,
+            .@"enum" => @intFromEnum(value) != 0,
+            else => @compileError("unexpected Windows BOOL representation"),
+        };
+    }
+
+    pub fn set(color: Color) OutputError!void {
+        const attributes: w.WORD = switch (color) {
+            .none => 0x0008,
+            .red => 0x000c,
+            .green => 0x000a,
+            .blue => 0x0009,
+            .yellow => 0x000e,
+            .white => 0x000f,
+            .cyan => 0x000b,
+        };
+        if (!boolSucceeded(SetConsoleTextAttribute(std.Io.File.stdout().handle, attributes))) {
+            return error.SetColorFailed;
+        }
+    }
+};
+
 pub const RawMode = switch (native_os) {
     .windows => WindowsRawMode,
     else => PosixRawMode,
@@ -219,6 +498,14 @@ const WindowsRawMode = struct {
 
     pub const ErrorSet = error{ NotATerminal, SetConsoleModeFailed };
 
+    fn boolSucceeded(value: w.BOOL) bool {
+        return switch (@typeInfo(w.BOOL)) {
+            .int => value != 0,
+            .@"enum" => @intFromEnum(value) != 0,
+            else => @compileError("unexpected Windows BOOL representation"),
+        };
+    }
+
     in_handle: w.HANDLE,
     out_handle: w.HANDLE,
     in_original: w.DWORD,
@@ -239,10 +526,10 @@ const WindowsRawMode = struct {
         _ = SetConsoleCP(cp_utf8);
         _ = SetConsoleOutputCP(cp_utf8);
 
-        if (!GetConsoleMode(in_handle, &in_mode).toBool()) {
+        if (!boolSucceeded(GetConsoleMode(in_handle, &in_mode))) {
             return ErrorSet.NotATerminal;
         }
-        if (!GetConsoleMode(out_handle, &out_mode).toBool()) {
+        if (!boolSucceeded(GetConsoleMode(out_handle, &out_mode))) {
             return ErrorSet.NotATerminal;
         }
 
@@ -253,10 +540,10 @@ const WindowsRawMode = struct {
         var new_out = out_mode;
         new_out |= ENABLE_PROCESSED_OUTPUT | ENABLE_VIRTUAL_TERMINAL_PROCESSING;
 
-        if (!SetConsoleMode(in_handle, new_in).toBool()) {
+        if (!boolSucceeded(SetConsoleMode(in_handle, new_in))) {
             return ErrorSet.SetConsoleModeFailed;
         }
-        if (!SetConsoleMode(out_handle, new_out).toBool()) {
+        if (!boolSucceeded(SetConsoleMode(out_handle, new_out))) {
             _ = SetConsoleMode(in_handle, in_mode);
             return ErrorSet.SetConsoleModeFailed;
         }

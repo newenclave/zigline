@@ -6,6 +6,7 @@ pub fn build(b: *std.Build) void {
     const mod = b.addModule("zigline", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
+        .link_libc = true,
     });
 
     const unit_tests = b.addModule("tests", .{

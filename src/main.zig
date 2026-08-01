@@ -12,13 +12,28 @@ pub fn main(init: std.process.Init) !void {
     var stdout_file_writer: Io.File.Writer = .init(.stdout(), io, &stdout_buffer);
     const out = &stdout_file_writer.interface;
 
-    try out.writeAll("zigline demo REPL\r\n\n");
+    var raw = try terminal.RawMode.enable();
+    defer raw.disable();
+
+    try terminal.Geometry.clear();
+    const size = try terminal.Geometry.size();
+    const frame_width: u16 = 16;
+    const frame_height: u16 = 3;
+    const x = if (size.x > frame_width) (size.x - frame_width) / 2 else 0;
+    const y = if (size.y > frame_height) (size.y - frame_height) / 2 else 0;
+
+    try terminal.Geometry.setPos(x, y);
+    try out.writeAll("┌──────────────┐\r\n");
+    try out.flush();
+    try terminal.Geometry.setPos(x, y + 1);
+    try out.writeAll("│hello, zigline│\r\n");
+    try out.flush();
+    try terminal.Geometry.setPos(x, y + 2);
+    try out.writeAll("└──────────────┘\r\n\r\n");
     try out.flush();
 
     var editor = zigline.Line.init(gpa, io, .{ .prompt = "zigline> " });
     defer editor.deinit();
-    var raw = try terminal.RawMode.enable();
-    defer raw.disable();
 
     while (try editor.readLine()) |line| {
         defer gpa.free(line);
@@ -34,7 +49,17 @@ pub fn main(init: std.process.Init) !void {
 
         try out.print("{d} token(s):\r\n", .{tokens.len});
         for (tokens, 0..) |tok, i| {
-            try out.print("  [{d}] '{s}'\r\n", .{ i, tok });
+            try out.print("  [{d}] '", .{i});
+            if (colorFor(tok)) |color| {
+                try out.flush();
+                try terminal.setColor(color);
+                try out.writeAll(tok);
+                try out.flush();
+                try terminal.none();
+            } else {
+                try out.writeAll(tok);
+            }
+            try out.writeAll("'\r\n");
         }
         try out.flush();
 
@@ -43,4 +68,15 @@ pub fn main(init: std.process.Init) !void {
 
     try out.writeAll("noniin!\r\n");
     try out.flush();
+}
+
+fn colorFor(word: []const u8) ?terminal.Color {
+    if (std.mem.eql(u8, word, "red")) return .red;
+    if (std.mem.eql(u8, word, "green")) return .green;
+    if (std.mem.eql(u8, word, "blue")) return .blue;
+    if (std.mem.eql(u8, word, "yellow")) return .yellow;
+    if (std.mem.eql(u8, word, "white") or std.mem.eql(u8, word, "light")) return .white;
+    if (std.mem.eql(u8, word, "cyan")) return .cyan;
+    if (std.mem.eql(u8, word, "none")) return .none;
+    return null;
 }
