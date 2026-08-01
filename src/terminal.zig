@@ -227,6 +227,14 @@ const PosixGeometry = struct {
         );
         if (std.posix.errno(result) != .SUCCESS) return error.NotATerminal;
     }
+
+    pub fn hideCursor() GeometryError!void {
+        try writeAll("\x1b[?25l");
+    }
+
+    pub fn showCursor() GeometryError!void {
+        try writeAll("\x1b[?25h");
+    }
 };
 
 const WindowsGeometry = struct {
@@ -240,6 +248,10 @@ const WindowsGeometry = struct {
         wAttributes: w.WORD,
         srWindow: SmallRect,
         dwMaximumWindowSize: CoordWin,
+    };
+    const ConsoleCursorInfo = extern struct {
+        dwSize: w.DWORD,
+        bVisible: w.BOOL,
     };
 
     extern "kernel32" fn GetConsoleScreenBufferInfo(
@@ -257,6 +269,14 @@ const WindowsGeometry = struct {
         handle: w.HANDLE,
         position: CoordWin,
     ) callconv(.winapi) w.BOOL;
+    extern "kernel32" fn GetConsoleCursorInfo(
+        handle: w.HANDLE,
+        info: *ConsoleCursorInfo,
+    ) callconv(.winapi) w.BOOL;
+    extern "kernel32" fn SetConsoleCursorInfo(
+        handle: w.HANDLE,
+        info: *const ConsoleCursorInfo,
+    ) callconv(.winapi) w.BOOL;
 
     pub const Coord = GeometryCoord;
     pub const GeometryError = error{ NotATerminal, OperationFailed, InvalidCoordinate };
@@ -266,6 +286,14 @@ const WindowsGeometry = struct {
         return switch (@typeInfo(w.BOOL)) {
             .int => value != 0,
             .@"enum" => @intFromEnum(value) != 0,
+            else => @compileError("unexpected Windows BOOL representation"),
+        };
+    }
+
+    fn boolFrom(value: bool) w.BOOL {
+        return switch (@typeInfo(w.BOOL)) {
+            .int => @intFromBool(value),
+            .@"enum" => @enumFromInt(@intFromBool(value)),
             else => @compileError("unexpected Windows BOOL representation"),
         };
     }
@@ -319,6 +347,22 @@ const WindowsGeometry = struct {
         ))) {
             return error.OperationFailed;
         }
+    }
+
+    fn setCursorVisible(visible: bool) GeometryError!void {
+        var info: ConsoleCursorInfo = undefined;
+        const handle = std.Io.File.stdout().handle;
+        if (!boolSucceeded(GetConsoleCursorInfo(handle, &info))) return error.NotATerminal;
+        info.bVisible = boolFrom(visible);
+        if (!boolSucceeded(SetConsoleCursorInfo(handle, &info))) return error.OperationFailed;
+    }
+
+    pub fn hideCursor() GeometryError!void {
+        try setCursorVisible(false);
+    }
+
+    pub fn showCursor() GeometryError!void {
+        try setCursorVisible(true);
     }
 };
 
