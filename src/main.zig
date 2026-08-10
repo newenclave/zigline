@@ -32,6 +32,18 @@ pub fn main(init: std.process.Init) !void {
     try out.writeAll("└──────────────┘\r\n\r\n");
     try out.flush();
 
+    const Scene = zigline.braille.StaticScene(16, 12);
+    var scene: Scene = .{};
+    for (0..Scene.dot_width) |dot_x| {
+        _ = scene.setDot(dot_x, dot_x / 2);
+        _ = scene.setDot(dot_x, Scene.dot_height - 1 - dot_x / 2);
+    }
+    if (y + 7 < size.y) {
+        try scene.renderAt(out, x, y + 4);
+        try out.flush();
+        try terminal.Geometry.setPos(0, y + 7);
+    }
+
     var editor = zigline.Line.init(gpa, io, .{ .prompt = "zigline> " });
     defer editor.deinit();
 

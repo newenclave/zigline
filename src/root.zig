@@ -3,6 +3,7 @@ const Io = std.Io;
 
 pub const Buffer = @import("buffer.zig").Buffer;
 pub const History = @import("history.zig").History;
+pub const braille = @import("braille.zig");
 
 pub const Line = @import("line.zig").Line;
 pub const renderLine = @import("render.zig").renderLine;

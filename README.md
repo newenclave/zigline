@@ -16,6 +16,35 @@ Cousin of [readline](https://en.wikipedia.org/wiki/GNU_Readline)/[replxx](https:
   escapes.
 - **Basic UTF-8:** accented letters, Cyrillic, Greek, emoji, etc. are treated
   as single characters when you move or delete (not chopped in half).
+- **Braille scenes:** static or dynamically allocated 2x4-dot canvases that
+  can be rendered at any terminal position.
+
+## Braille scenes
+
+Scene dimensions and drawing coordinates are specified in Braille dots. One
+terminal character represents a `2 x 4` group of dots. `renderAt` takes
+terminal-column and terminal-row coordinates; it clips anything outside the
+visible terminal area.
+
+```zig
+const Scene = zigline.braille.StaticScene(16, 12);
+var scene: Scene = .{};
+_ = scene.setDot(0, 0);
+_ = scene.setDot(15, 11);
+try scene.renderAt(out, 4, 2);
+try out.flush();
+```
+
+Use `DynamicScene` when the dimensions are available only at runtime:
+
+```zig
+var scene = try zigline.braille.DynamicScene.init(gpa, width, height);
+defer scene.deinit();
+
+_ = scene.setDot(0, 0);
+try scene.renderAt(out, 4, 2);
+try out.flush();
+```
 
 ## A quick example (main.zig)
 

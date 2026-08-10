@@ -1,4 +1,5 @@
 test {
+    _ = @import("braille.zig");
     _ = @import("buffer.zig");
     _ = @import("terminal.zig");
     _ = @import("history.zig");
