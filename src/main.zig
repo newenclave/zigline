@@ -32,15 +32,31 @@ pub fn main(init: std.process.Init) !void {
     try out.writeAll("└──────────────┘\r\n\r\n");
     try out.flush();
 
-    const Scene = zigline.braille.StaticScene(16, 12);
+    const Scene = zigline.braille.StaticScene(32, 8);
     var scene: Scene = .{};
-    for (0..Scene.dot_width) |dot_x| {
-        _ = scene.setDot(dot_x, dot_x / 2);
-        _ = scene.setDot(dot_x, Scene.dot_height - 1 - dot_x / 2);
+    for (0..Scene.dot_height) |dot_y| {
+        for (0..Scene.dot_width) |dot_x| {
+            _ = scene.setDot(dot_x, dot_y);
+        }
     }
+
+    var attributes: [Scene.width_in_cells * Scene.height_in_cells][3]u8 = undefined;
+    for (0..Scene.height_in_cells) |row| {
+        for (0..Scene.width_in_cells) |column| {
+            attributes[row * Scene.width_in_cells + column] = .{
+                @intCast(32 + (column * 13) % 192),
+                @intCast(64 + row * 96),
+                @intCast(255 - column * 12),
+            };
+        }
+    }
+
     if (y + 7 < size.y) {
-        try scene.renderAt(out, x, y + 4);
-        try out.flush();
+        const context = BrailleDemoContext{
+            .attributes = attributes[0..],
+            .width = Scene.width_in_cells,
+        };
+        try scene.renderStyledAt(out, x, y + 4, &context, BrailleDemoContext.style);
         try terminal.Geometry.setPos(0, y + 7);
     }
 
@@ -81,6 +97,18 @@ pub fn main(init: std.process.Init) !void {
     try out.writeAll("noniin!\r\n");
     try out.flush();
 }
+
+const BrailleDemoContext = struct {
+    attributes: []const [3]u8,
+    width: usize,
+
+    fn style(self: *const @This(), column: usize, row: usize, cell: u8) zigline.braille.Style {
+        if (cell == zigline.braille.empty()) return .{};
+        return .{
+            .foreground = self.attributes[row * self.width + column],
+        };
+    }
+};
 
 fn colorFor(word: []const u8) ?terminal.Color {
     if (std.mem.eql(u8, word, "red")) return .red;

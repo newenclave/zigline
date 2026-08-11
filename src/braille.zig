@@ -32,6 +32,10 @@ const applyCleanDot = cleanDot;
 
 pub const RenderError = terminal.Geometry.Error || std.Io.Writer.Error;
 
+pub const Style = struct {
+    foreground: ?[3]u8 = null,
+};
+
 pub fn toUnicode(src: u8) u32 {
     return BASE + src;
 }
@@ -92,6 +96,95 @@ fn renderCells(
     }
 }
 
+fn sameStyle(a: Style, b: Style) bool {
+    return if (a.foreground) |a_foreground|
+        if (b.foreground) |b_foreground| std.mem.eql(u8, &a_foreground, &b_foreground) else false
+    else b.foreground == null;
+}
+
+fn writeStyle(writer: *std.Io.Writer, style: Style) std.Io.Writer.Error!void {
+    if (style.foreground) |foreground| {
+        try writer.print("\x1b[38;2;{d};{d};{d}m", .{ foreground[0], foreground[1], foreground[2] });
+    } else {
+        try writer.writeAll("\x1b[0m");
+    }
+}
+
+fn renderStyledRow(
+    writer: *std.Io.Writer,
+    cells: []const u8,
+    row: usize,
+    width_in_cells: usize,
+    visible_width: usize,
+    context: anytype,
+    comptime styleForCell: fn (@TypeOf(context), column: usize, row: usize, cell: u8) Style,
+) std.Io.Writer.Error!void {
+    var active_style: Style = .{};
+    for (0..visible_width) |column| {
+        var utf8: [4]u8 = undefined;
+        const cell = cells[row * width_in_cells + column];
+        const style = styleForCell(context, column, row, cell);
+        if (!sameStyle(style, active_style)) {
+            try writeStyle(writer, style);
+            active_style = style;
+        }
+        const len = std.unicode.utf8Encode(@intCast(toUnicode(cell)), &utf8) catch unreachable;
+        try writer.writeAll(utf8[0..len]);
+    }
+    try writeStyle(writer, .{});
+}
+
+fn renderStyledCells(
+    writer: *std.Io.Writer,
+    cells: []const u8,
+    width_in_cells: usize,
+    height_in_cells: usize,
+    x: u16,
+    y: u16,
+    context: anytype,
+    comptime styleForCell: fn (@TypeOf(context), column: usize, row: usize, cell: u8) Style,
+) RenderError!void {
+    const terminal_size = try terminal.Geometry.size();
+    if (x >= terminal_size.x or y >= terminal_size.y) {
+        return;
+    }
+
+    const visible_width: usize = @min(width_in_cells, @as(usize, terminal_size.x - x));
+    const visible_height: usize = @min(height_in_cells, @as(usize, terminal_size.y - y));
+
+    // Geometry moves the console cursor outside the buffered writer.
+    try writer.flush();
+    for (0..visible_height) |row| {
+        try terminal.Geometry.setPos(x, y + @as(u16, @intCast(row)));
+        try renderStyledRow(writer, cells, row, width_in_cells, visible_width, context, styleForCell);
+        try writer.flush();
+    }
+    try writeStyle(writer, .{});
+    try writer.flush();
+}
+
+fn testStyleForCell(styles: []const Style, column: usize, _: usize, _: u8) Style {
+    return styles[column];
+}
+
+test "styled Braille rows coalesce adjacent styles and reset" {
+    const cells = [_]u8{ 0x01, 0x02, 0x03 };
+    const styles = [_]Style{
+        .{ .foreground = .{ 1, 2, 3 } },
+        .{ .foreground = .{ 1, 2, 3 } },
+        .{ .foreground = .{ 4, 5, 6 } },
+    };
+    const styles_slice: []const Style = &styles;
+    var output: [64]u8 = undefined;
+    var writer = std.Io.Writer.fixed(&output);
+
+    try renderStyledRow(&writer, &cells, 0, cells.len, cells.len, styles_slice, testStyleForCell);
+    try std.testing.expectEqualStrings(
+        "\x1b[38;2;1;2;3m\xe2\xa0\x81\xe2\xa0\x82\x1b[38;2;4;5;6m\xe2\xa0\x83\x1b[0m",
+        writer.buffered(),
+    );
+}
+
 pub fn StaticScene(comptime width: usize, comptime height: usize) type {
     const scene_cell_width = cellWidth(width);
     const scene_cell_height = cellHeight(height);
@@ -150,6 +243,26 @@ pub fn StaticScene(comptime width: usize, comptime height: usize) type {
                 scene_cell_height,
                 x,
                 y,
+            );
+        }
+
+        pub fn renderStyledAt(
+            self: *const Self,
+            writer: *std.Io.Writer,
+            x: u16,
+            y: u16,
+            context: anytype,
+            comptime styleForCell: fn (@TypeOf(context), column: usize, row: usize, cell: u8) Style,
+        ) RenderError!void {
+            try renderStyledCells(
+                writer,
+                &self.cells,
+                scene_cell_width,
+                scene_cell_height,
+                x,
+                y,
+                context,
+                styleForCell,
             );
         }
     };
@@ -230,6 +343,26 @@ pub const DynamicScene = struct {
             self.height_in_cells,
             x,
             y,
+        );
+    }
+
+    pub fn renderStyledAt(
+        self: *const Self,
+        writer: *std.Io.Writer,
+        x: u16,
+        y: u16,
+        context: anytype,
+        comptime styleForCell: fn (@TypeOf(context), column: usize, row: usize, cell: u8) Style,
+    ) RenderError!void {
+        try renderStyledCells(
+            writer,
+            self.cells,
+            self.width_in_cells,
+            self.height_in_cells,
+            x,
+            y,
+            context,
+            styleForCell,
         );
     }
 };
