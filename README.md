@@ -18,6 +18,8 @@ Cousin of [readline](https://en.wikipedia.org/wiki/GNU_Readline)/[replxx](https:
   as single characters when you move or delete (not chopped in half).
 - **Braille scenes:** static or dynamically allocated 2x4-dot canvases that
   can be rendered at any terminal position.
+- **Console control:** raw input mode, key decoding, terminal geometry, cursor
+  visibility, screen clearing, and a small color palette on POSIX and Windows.
 
 ## Braille scenes
 
@@ -44,6 +46,30 @@ defer scene.deinit();
 _ = scene.setDot(0, 0);
 try scene.renderAt(out, 4, 2);
 try out.flush();
+```
+
+## Console control
+
+`zigline.terminal` provides the low-level terminal operations used by the line
+editor. `RawMode.enable` switches stdin to byte-by-byte input and restores the
+previous console state with `disable`. `readKey` decodes UTF-8 text, common
+control keys, and CSI/SS3 escape sequences such as arrows, Home, End, and
+Delete.
+
+`Geometry` exposes the current size plus `clear`, `setPos`, `hideCursor`, and
+`showCursor`. The `red`, `green`, `blue`, `yellow`, `cyan`, `light`, and `none`
+helpers change stdout color.
+
+```zig
+const terminal = zigline.terminal;
+
+var raw = try terminal.RawMode.enable();
+defer raw.disable();
+
+const size = try terminal.Geometry.size();
+try terminal.Geometry.setPos(0, size.y - 1);
+try terminal.green();
+defer terminal.none() catch {};
 ```
 
 ## A quick example (main.zig)
