@@ -20,6 +20,23 @@ test "StaticScene rounds dot dimensions up to Braille cells" {
     try std.testing.expectEqual(@as(usize, 2), Scene.height_in_cells);
 }
 
+test "Scenes clean all cells" {
+    var static_scene: braille.StaticScene(3, 5) = .{};
+    _ = static_scene.setDot(0, 0);
+    _ = static_scene.setDot(2, 4);
+    static_scene.clean();
+    try std.testing.expectEqual(@as(?u8, 0), static_scene.cellAt(0, 0));
+    try std.testing.expectEqual(@as(?u8, 0), static_scene.cellAt(1, 1));
+
+    var dynamic_scene = try braille.DynamicScene.init(std.testing.allocator, 3, 5);
+    defer dynamic_scene.deinit();
+    _ = dynamic_scene.setDot(0, 0);
+    _ = dynamic_scene.setDot(2, 4);
+    dynamic_scene.clean();
+    try std.testing.expectEqual(@as(?u8, 0), dynamic_scene.cellAt(0, 0));
+    try std.testing.expectEqual(@as(?u8, 0), dynamic_scene.cellAt(1, 1));
+}
+
 test "Scenes reject dots and cells outside their bounds" {
     var static_scene: braille.StaticScene(2, 4) = .{};
     try std.testing.expect(!static_scene.setDot(2, 0));

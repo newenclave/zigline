@@ -131,6 +131,10 @@ pub fn StaticScene(comptime width: usize, comptime height: usize) type {
             );
         }
 
+        pub fn clean(self: *Self) void {
+            @memset(self.cells[0..], MIN);
+        }
+
         pub fn cellAt(self: *const Self, x: usize, y: usize) ?u8 {
             if (x >= scene_cell_width or y >= scene_cell_height) {
                 return null;
@@ -205,6 +209,10 @@ pub const DynamicScene = struct {
             y,
             applyCleanDot,
         );
+    }
+
+    pub fn clean(self: *Self) void {
+        @memset(self.cells, MIN);
     }
 
     pub fn cellAt(self: *const Self, x: usize, y: usize) ?u8 {
