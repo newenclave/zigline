@@ -48,6 +48,12 @@ try scene.renderAt(out, 4, 2);
 try out.flush();
 ```
 
+`renderWithAt` lets a renderer react to every visible Braille glyph. It calls
+`beginRender` once, `beforeCell` before each glyph, and `endRender` after the
+last glyph. The renderer can keep state in its mutable context and write any
+terminal control sequences through the supplied writer; the scene always writes
+the glyph itself.
+
 ## Console control
 
 `zigline.terminal` provides the low-level terminal operations used by the line

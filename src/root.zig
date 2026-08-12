@@ -7,6 +7,7 @@ pub const braille = @import("braille.zig");
 
 pub const Line = @import("line.zig").Line;
 pub const renderLine = @import("render.zig").renderLine;
+pub const renderer = @import("renderer.zig");
 
 pub const terminal = @import("terminal.zig");
 pub const tokenize = @import("tokenize.zig").tokenize;

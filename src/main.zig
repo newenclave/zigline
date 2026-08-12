@@ -52,11 +52,11 @@ pub fn main(init: std.process.Init) !void {
     }
 
     if (y + 7 < size.y) {
-        const context = BrailleDemoContext{
+        var context = BrailleDemoContext{
             .attributes = attributes[0..],
             .width = Scene.width_in_cells,
         };
-        try scene.renderStyledAt(out, x, y + 4, &context, BrailleDemoContext.style);
+        try scene.renderWithAt(out, x, y + 4, &context, BrailleDemoRenderer);
         try terminal.Geometry.setPos(0, y + 7);
     }
 
@@ -101,12 +101,35 @@ pub fn main(init: std.process.Init) !void {
 const BrailleDemoContext = struct {
     attributes: []const [3]u8,
     width: usize,
+    active_foreground: ?[3]u8 = null,
+};
 
-    fn style(self: *const @This(), column: usize, row: usize, cell: u8) zigline.braille.Style {
-        if (cell == zigline.braille.empty()) return .{};
-        return .{
-            .foreground = self.attributes[row * self.width + column],
-        };
+const BrailleDemoRenderer = struct {
+    pub const Error = std.Io.Writer.Error;
+
+    pub fn beginRender(context: *BrailleDemoContext, _: *std.Io.Writer) Error!void {
+        context.active_foreground = null;
+    }
+
+    pub fn beforeCell(
+        context: *BrailleDemoContext,
+        writer: *std.Io.Writer,
+        column: usize,
+        row: usize,
+        _: []const u8,
+    ) Error!void {
+        const foreground = context.attributes[row * context.width + column];
+        if (context.active_foreground) |active_foreground| {
+            if (std.mem.eql(u8, &foreground, &active_foreground)) {
+                return;
+            }
+        }
+        try writer.print("\x1b[38;2;{d};{d};{d}m", .{ foreground[0], foreground[1], foreground[2] });
+        context.active_foreground = foreground;
+    }
+
+    pub fn endRender(_: *BrailleDemoContext, writer: *std.Io.Writer) Error!void {
+        try writer.writeAll("\x1b[0m");
     }
 };
 
