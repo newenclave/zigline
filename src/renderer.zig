@@ -1,3 +1,15 @@
+//!
+//! renderer.zig - Render for line editing
+//!
+//! @author
+//!     newenclave
+//! @license
+//!     MIT
+//! @see
+//!     github.com/newenclave/zigline
+//!
+//!
+//!
 //! Generic lifecycle contract for renderers that react to terminal cells.
 const std = @import("std");
 

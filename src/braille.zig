@@ -1,3 +1,14 @@
+//!
+//! braille.zig - Braille scene
+//!
+//! @author
+//!     newenclave
+//! @license
+//!     MIT
+//! @see
+//!     github.com/newenclave/zigline
+//!
+
 const std = @import("std");
 const terminal = @import("terminal.zig");
 
